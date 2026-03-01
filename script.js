@@ -123,82 +123,48 @@ function updateHistory(){
 }
 
 // Full PDF with summary + original + ELA thumbnails
-const jsPDF = window.jspdf.jsPDF;
-document.getElementById("downloadPdfBtn").addEventListener("click", function(){
-  if(history.length===0){alert("No uploads yet to generate PDF!"); return;}
-  const doc=new jsPDF(); let y=20;
-
-  // --- SUMMARY PAGE ---
-  const total = history.length;
-  const avgRisk = (history.reduce((sum,h)=>sum+h.risk,0)/total).toFixed(2);
-  const highCount = history.filter(h=>h.risk>=70).length;
-  const medCount = history.filter(h=>h.risk>=35 && h.risk<70).length;
-  const lowCount = history.filter(h=>h.risk<35).length;
-
-  doc.setFontSize(22); doc.text("GeoTag Forensic Report – Summary",105,y,{align:"center"}); y+=15;
-  doc.setFontSize(14);
-  doc.text(`Total Uploads: ${total}`,14,y); y+=8;
-  doc.text(`Average Risk: ${avgRisk}%`,14,y); y+=8;
-  doc.text(`High Risk Uploads: ${highCount}`,14,y); y+=8;
-  doc.text(`Medium Risk Uploads: ${medCount}`,14,y); y+=8;
-  doc.text(`Low Risk Uploads: ${lowCount}`,14,y); y+=15;
-
-  const chartWidth=100; const barHeight=8;
-  if(highCount>0){doc.setFillColor("#ef4444"); doc.rect(14,y,(highCount/total)*chartWidth,barHeight,'F'); y+=barHeight+2;}
-  if(medCount>0){doc.setFillColor("#f59e0b"); doc.rect(14,y,(medCount/total)*chartWidth,barHeight,'F'); y+=barHeight+2;}
-  if(lowCount>0){doc.setFillColor("#22c55e"); doc.rect(14,y,(lowCount/total)*chartWidth,barHeight,'F'); y+=barHeight+10;}
-
-  doc.addPage(); y=20;
-
-  // --- INDIVIDUAL UPLOADS ---
-  for(let i=0;i<history.length;i++){
-    const h=history[i];
-    doc.setFontSize(14); doc.text(`Upload #${i+1}`,14,y); y+=6;
-    doc.setFontSize(12); doc.text(`Filename: ${h.name}`,14,y); y+=6;
-
-    let riskColor="#22c55e";
-    if(h.risk>=70) riskColor="#ef4444";
-    else if(h.risk>=35) riskColor="#f59e0b";
-
-    doc.setTextColor(riskColor); doc.text(`Risk Probability: ${h.risk}%`,14,y); y+=6;
-    doc.setTextColor("#000000"); doc.text(`Timestamp: ${h.time}`,14,y); y+=6;
-
-    if(h.metadata && h.metadata.GPSLatitude && h.metadata.GPSLongitude){
-      const lat=convert(h.metadata.GPSLatitude,h.metadata.GPSLatitudeRef);
-      const lon=convert(h.metadata.GPSLongitude,h.metadata.GPSLongitudeRef);
-      doc.text(`GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)}`,14,y); y+=6;
-      doc.setTextColor("#3b82f6");
-      doc.text(`Google Maps: https://maps.google.com/?q=${lat},${lon}`,14,y); y+=6;
-      doc.setTextColor("#000000");
-    }
-
-    if(h.metadata && h.metadata.Software){doc.text(`Detected Software: ${h.metadata.Software}`,14,y); y+=6;}
-
-    // Original + ELA thumbnails
-    const { jsPDF } = window.jspdf;
+const { jsPDF } = window.jspdf;
 
 document.getElementById("downloadPdfBtn").addEventListener("click", function () {
 
-  const doc = new jsPDF({ compress: true });
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+    compress: true
+  });
 
-  const canvas = document.getElementById("originalCanvas");
+  function compressCanvas(canvas, scale = 0.4, quality = 0.6) {
+    const smallCanvas = document.createElement("canvas");
+    const ctx = smallCanvas.getContext("2d");
 
-  // 🔥 CREATE SMALLER VERSION
-  const smallCanvas = document.createElement("canvas");
-  const ctx = smallCanvas.getContext("2d");
+    smallCanvas.width = canvas.width * scale;
+    smallCanvas.height = canvas.height * scale;
 
-  const scale = 0.3; // 30% size (pwede mo gawing 0.4 or 0.5)
-  smallCanvas.width = canvas.width * scale;
-  smallCanvas.height = canvas.height * scale;
+    ctx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
 
-  ctx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
+    return smallCanvas.toDataURL("image/jpeg", quality);
+  }
 
-  // 🔥 Convert to compressed JPEG
-  const imgData = smallCanvas.toDataURL("image/jpeg", 0.5);
+  const originalCanvas = document.getElementById("originalCanvas");
+  const elaCanvas = document.getElementById("elaCanvas");
 
-  doc.addImage(imgData, "JPEG", 10, 20, 180, 100);
+  // 🔥 COMPRESSED IMAGES
+  const originalImg = compressCanvas(originalCanvas, 0.4, 0.6);
+  const elaImg = compressCanvas(elaCanvas, 0.4, 0.6);
 
-  doc.save("report.pdf");
+  doc.text("Image Analysis Report", 20, 15);
+
+  doc.text("Original Image", 20, 25);
+  doc.addImage(originalImg, "JPEG", 20, 30, 170, 70);
+
+  doc.text("ELA Heatmap", 20, 110);
+  doc.addImage(elaImg, "JPEG", 20, 115, 170, 70);
+
+  const resultText = document.getElementById("result").innerText;
+  doc.text(resultText || "No result available.", 20, 200);
+
+  doc.save("analysis-report.pdf");
 
 });
 
