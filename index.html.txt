@@ -1,0 +1,211 @@
+<div class="app-container">
+  <h1>GeoTag Verification System</h1>
+
+  <!-- Login Card -->
+  <div class="card" id="loginDiv">
+    <h2>Admin Login</h2>
+    <input type="text" id="username" placeholder="Username">
+    <input type="password" id="password" placeholder="Password">
+    <button id="loginBtn">Login</button>
+    <p id="loginMsg"></p>
+  </div>
+
+  <!-- Main Panel -->
+  <div class="card" id="mainPanel" style="display:none;">
+    <h2>Upload Image</h2>
+    <input type="file" id="imageInput" accept="image/*">
+
+    <div class="photos-container">
+      <div>
+        <h3>Original Image</h3>
+        <canvas id="originalCanvas"></canvas>
+      </div>
+      <div>
+        <h3>ELA Heatmap</h3>
+        <canvas id="elaCanvas"></canvas>
+      </div>
+    </div>
+
+    <div id="result"></div>
+    <button id="downloadPdfBtn">Download PDF Report</button>
+
+    <h3>Upload History</h3>
+    <ul id="history"></ul>
+  </div>
+
+  <!-- CSS -->
+  <style>
+    body {
+      margin:0; padding:0;
+      font-family: 'Segoe UI', sans-serif;
+      min-height:100vh;
+      display:flex; justify-content:center; align-items:flex-start;
+      padding:30px;
+
+      /* FULL BACKGROUND PHOTO - palitan lang ang URL ng image mo */
+      background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)),
+                  url('https://sufficient-jade-oqm9tohfpo.edgeone.app/1759188359397.jpg'); /* <-- PASTE YOUR BACKGROUND IMAGE URL HERE */
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+      color:#fff;
+    }
+
+    .app-container { max-width:1000px; width:100%; }
+    h1 { text-align:center; margin-bottom:20px; font-size:2.2rem; text-shadow: 1px 1px 4px #000; }
+
+    .card {
+      background: rgba(0,0,0,0.5); /* semi-transparent to see background */
+      backdrop-filter: blur(10px);
+      padding:20px; border-radius:15px;
+      margin-bottom:20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+
+    input { display:block; width:100%; padding:10px; margin:10px 0; border-radius:8px; border:none; }
+    button { padding:10px 15px; border:none; border-radius:8px; background:#3b82f6; color:white; cursor:pointer; font-weight:bold; }
+    #result { margin-top:20px; padding:10px; background: rgba(0,0,0,0.3); border-radius:10px; text-align:left; }
+    .photos-container { display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-top:15px; }
+    canvas { border-radius:10px; border:1px solid rgba(255,255,255,0.3); max-width:100%; }
+    ul { list-style:none; padding-left:0; margin-top:10px; max-height:150px; overflow-y:auto; }
+    ul li { padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.2); }
+  </style>
+
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/exif-js@2.3.0/exif.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- JS -->
+  <script>
+    const { jsPDF } = window.jspdf;
+    let history=[];
+
+    // Admin login
+    const loginBtn=document.getElementById("loginBtn");
+    loginBtn.onclick=function(){
+      const u=document.getElementById("username").value;
+      const p=document.getElementById("password").value;
+      if(u==="admin" && p==="password"){
+        document.getElementById("loginDiv").style.display="none";
+        document.getElementById("mainPanel").style.display="block";
+      } else { document.getElementById("loginMsg").textContent="Invalid credentials"; }
+    }
+
+    // Image upload & ELA
+    document.getElementById("imageInput").addEventListener("change", function(e){
+      const file=e.target.files[0];
+      if(!file) return;
+
+      const reader=new FileReader();
+      reader.onload=function(ev){
+        const img=new Image();
+        img.src=ev.target.result;
+        img.onload=function(){
+          const oCanvas=document.getElementById("originalCanvas");
+          oCanvas.width=img.width; oCanvas.height=img.height;
+          const oCtx=oCanvas.getContext("2d");
+          oCtx.drawImage(img,0,0);
+
+          const eCanvas=document.getElementById("elaCanvas");
+          eCanvas.width=img.width; eCanvas.height=img.height;
+          const eCtx=eCanvas.getContext("2d");
+
+          const recompress=document.createElement("canvas");
+          recompress.width=img.width; recompress.height=img.height;
+          recompress.getContext("2d").drawImage(img,0,0);
+
+          const tmpImg=new Image();
+          tmpImg.src=recompress.toDataURL("image/jpeg",0.7);
+          tmpImg.onload=function(){
+            eCtx.drawImage(tmpImg,0,0);
+            const oData=oCtx.getImageData(0,0,img.width,img.height);
+            const rData=eCtx.getImageData(0,0,img.width,img.height);
+            const diffData=eCtx.createImageData(img.width,img.height);
+            let suspicious=0;
+            for(let i=0;i<oData.data.length;i+=4){
+              let diff=Math.abs(oData.data[i]-rData.data[i])+
+                       Math.abs(oData.data[i+1]-rData.data[i+1])+
+                       Math.abs(oData.data[i+2]-rData.data[i+2]);
+              let intensity=diff*4;
+              if(intensity>200) suspicious++;
+              diffData.data[i]=intensity;
+              diffData.data[i+1]=0;
+              diffData.data[i+2]=0;
+              diffData.data[i+3]=255;
+            }
+            eCtx.putImageData(diffData,0,0);
+
+            EXIF.getData(img,function(){
+              const meta=EXIF.getAllTags(this);
+              analyzeResult(meta,file,suspicious,img.width*img.height,eCanvas.toDataURL());
+            });
+          }
+        }
+      }
+      reader.readAsDataURL(file);
+    });
+
+    function analyzeResult(meta,file,suspicious,totalPixels,elaDataUrl){
+      let risk=0; let html="";
+      if(!meta || Object.keys(meta).length===0){html+="<p>⚠ No metadata</p>"; risk+=50;}
+      if(meta.Software){html+="<p><b>Software:</b>"+meta.Software+"</p>"; if(/photoshop|lightroom|snapseed|gimp|canva/i.test(meta.Software)) risk+=40;}
+      if(!meta.GPSLatitude){html+="<p>⚠ No GPS Data</p>"; risk+=20;}
+      const elaRatio=suspicious/totalPixels;
+      if(elaRatio>0.05){html+="<p class='high'>⚠ High ELA anomaly</p>"; risk+=40;}
+      else if(elaRatio>0.02){html+="<p class='medium'>⚠ Moderate ELA anomaly</p>"; risk+=20;}
+
+      let level="LOW RISK", cls="low";
+      if(risk>=70){level="HIGH RISK"; cls="high";}
+      else if(risk>=35){level="MEDIUM RISK"; cls="medium";}
+      html+="<hr><h3 class='"+cls+"'>"+level+"</h3>";
+      html+="<p><b>Tamper Probability:</b> "+Math.min(risk,100)+"%</p>";
+      document.getElementById("result").innerHTML=html;
+
+      history.push({
+        name:file.name,
+        risk:Math.min(risk,100),
+        time:new Date().toLocaleString(),
+        metadata:meta,
+        elaDataUrl:elaDataUrl,
+        originalDataUrl:document.getElementById("originalCanvas").toDataURL()
+      });
+
+      updateHistory();
+    }
+
+    function updateHistory(){
+      const ul=document.getElementById("history");
+      ul.innerHTML="";
+      history.forEach(h=>{
+        const li=document.createElement("li");
+        li.textContent=`${h.time} - ${h.name} - Risk: ${h.risk}%`;
+        ul.appendChild(li);
+      });
+    }
+
+    // PDF generation
+    document.getElementById("downloadPdfBtn").addEventListener("click", function(){
+      if(history.length===0){alert("No uploads!"); return;}
+      const doc=new jsPDF();
+      let y=20;
+      doc.setFontSize(22); doc.text("GeoTag Forensic Report",105,y,{align:"center"}); y+=20;
+
+      history.forEach((h,i)=>{
+        doc.setFontSize(14); doc.text(`Upload #${i+1} - ${h.name}`,14,y); y+=6;
+        doc.text(`Risk: ${h.risk}%`,14,y); y+=6;
+        if(h.originalDataUrl && h.elaDataUrl){
+          const oProps=doc.getImageProperties(h.originalDataUrl);
+          const eProps=doc.getImageProperties(h.elaDataUrl);
+          const oWidth=50, oHeight=(oProps.height*oWidth)/oProps.width;
+          const eWidth=50, eHeight=(eProps.height*eWidth)/eProps.width;
+          doc.addImage(h.originalDataUrl,'PNG',14,y,oWidth,oHeight);
+          doc.addImage(h.elaDataUrl,'PNG',14+oWidth+5,y,eWidth,eHeight);
+          y+=Math.max(oHeight,eHeight)+6;
+        }
+        if(y>250){doc.addPage(); y=20;}
+      });
+
+      doc.save("GeoTag_Report.pdf");
+    });
+  </script>
