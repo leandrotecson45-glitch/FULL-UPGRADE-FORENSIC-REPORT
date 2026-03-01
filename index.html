@@ -184,51 +184,28 @@
       });
     }
 
-    // PDF generation
+     // PDF generation
     document.getElementById("downloadPdfBtn").addEventListener("click", function(){
       if(history.length===0){alert("No uploads!"); return;}
-      const { jsPDF } = window.jspdf;
+      const doc=new jsPDF();
+      let y=20;
+      doc.setFontSize(22); doc.text("GeoTag Forensic Report",105,y,{align:"center"}); y+=20;
 
-document.getElementById("downloadPdfBtn").addEventListener("click", function () {
+      history.forEach((h,i)=>{
+        doc.setFontSize(14); doc.text(`Upload #${i+1} - ${h.name}`,14,y); y+=6;
+        doc.text(`Risk: ${h.risk}%`,14,y); y+=6;
+        if(h.originalDataUrl && h.elaDataUrl){
+          const oProps=doc.getImageProperties(h.originalDataUrl);
+          const eProps=doc.getImageProperties(h.elaDataUrl);
+          const oWidth=50, oHeight=(oProps.height*oWidth)/oProps.width;
+          const eWidth=50, eHeight=(eProps.height*eWidth)/eProps.width;
+          doc.addImage(h.originalDataUrl,'PNG',14,y,oWidth,oHeight);
+          doc.addImage(h.elaDataUrl,'PNG',14+oWidth+5,y,eWidth,eHeight);
+          y+=Math.max(oHeight,eHeight)+6;
+        }
+        if(y>250){doc.addPage(); y=20;}
+      });
 
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-    compress: true
-  });
-
-  function compressCanvas(canvas) {
-
-    // 🔥 FIXED SMALL SIZE (hindi percentage)
-    const targetWidth = 800; // fixed width
-    const scale = targetWidth / canvas.width;
-
-    const smallCanvas = document.createElement("canvas");
-    const ctx = smallCanvas.getContext("2d");
-
-    smallCanvas.width = targetWidth;
-    smallCanvas.height = canvas.height * scale;
-
-    ctx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
-
-    // 🔥 VERY COMPRESSED JPEG
-    return smallCanvas.toDataURL("image/jpeg", 0.4);
-  }
-
-  const originalCanvas = document.getElementById("originalCanvas");
-  const elaCanvas = document.getElementById("elaCanvas");
-
-  const originalImg = compressCanvas(originalCanvas);
-  const elaImg = compressCanvas(elaCanvas);
-
-  doc.text("Image Analysis Report", 20, 15);
-
-  doc.addImage(originalImg, "JPEG", 20, 20, 170, 60);
-  doc.addImage(elaImg, "JPEG", 20, 90, 170, 60);
-
-  doc.save("analysis-report.pdf");
-
-});
+      doc.save("GeoTag_Report.pdf");
+    });
   </script>
-
