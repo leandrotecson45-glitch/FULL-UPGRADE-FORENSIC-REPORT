@@ -123,46 +123,80 @@ function updateHistory(){
 }
 
 // Full PDF with summary + original + ELA thumbnails
-const { jsPDF } = window.jspdf;
+const jsPDF = window.jspdf.jsPDF;
+document.getElementById("downloadPdfBtn").addEventListener("click", function(){
+  if(history.length===0){alert("No uploads yet to generate PDF!"); return;}
+  const doc=new jsPDF(); let y=20;
 
-document.getElementById("downloadPdfBtn").addEventListener("click", function () {
+  // --- SUMMARY PAGE ---
+  const total = history.length;
+  const avgRisk = (history.reduce((sum,h)=>sum+h.risk,0)/total).toFixed(2);
+  const highCount = history.filter(h=>h.risk>=70).length;
+  const medCount = history.filter(h=>h.risk>=35 && h.risk<70).length;
+  const lowCount = history.filter(h=>h.risk<35).length;
 
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-    compress: true
-  });
+  doc.setFontSize(22); doc.text("GeoTag Forensic Report – Summary",105,y,{align:"center"}); y+=15;
+  doc.setFontSize(14);
+  doc.text(`Total Uploads: ${total}`,14,y); y+=8;
+  doc.text(`Average Risk: ${avgRisk}%`,14,y); y+=8;
+  doc.text(`High Risk Uploads: ${highCount}`,14,y); y+=8;
+  doc.text(`Medium Risk Uploads: ${medCount}`,14,y); y+=8;
+  doc.text(`Low Risk Uploads: ${lowCount}`,14,y); y+=15;
 
-  function compressCanvas(canvas) {
+  const chartWidth=100; const barHeight=8;
+  if(highCount>0){doc.setFillColor("#ef4444"); doc.rect(14,y,(highCount/total)*chartWidth,barHeight,'F'); y+=barHeight+2;}
+  if(medCount>0){doc.setFillColor("#f59e0b"); doc.rect(14,y,(medCount/total)*chartWidth,barHeight,'F'); y+=barHeight+2;}
+  if(lowCount>0){doc.setFillColor("#22c55e"); doc.rect(14,y,(lowCount/total)*chartWidth,barHeight,'F'); y+=barHeight+10;}
 
-    // 🔥 FIXED SMALL SIZE (hindi percentage)
-    const targetWidth = 800; // fixed width
-    const scale = targetWidth / canvas.width;
+  doc.addPage(); y=20;
 
-    const smallCanvas = document.createElement("canvas");
-    const ctx = smallCanvas.getContext("2d");
+  // --- INDIVIDUAL UPLOADS ---
+  for(let i=0;i<history.length;i++){
+    const h=history[i];
+    doc.setFontSize(14); doc.text(`Upload #${i+1}`,14,y); y+=6;
+    doc.setFontSize(12); doc.text(`Filename: ${h.name}`,14,y); y+=6;
 
-    smallCanvas.width = targetWidth;
-    smallCanvas.height = canvas.height * scale;
+    let riskColor="#22c55e";
+    if(h.risk>=70) riskColor="#ef4444";
+    else if(h.risk>=35) riskColor="#f59e0b";
 
-    ctx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
+    doc.setTextColor(riskColor); doc.text(`Risk Probability: ${h.risk}%`,14,y); y+=6;
+    doc.setTextColor("#000000"); doc.text(`Timestamp: ${h.time}`,14,y); y+=6;
 
-    // 🔥 VERY COMPRESSED JPEG
-    return smallCanvas.toDataURL("image/jpeg", 0.4);
+    if(h.metadata && h.metadata.GPSLatitude && h.metadata.GPSLongitude){
+      const lat=convert(h.metadata.GPSLatitude,h.metadata.GPSLatitudeRef);
+      const lon=convert(h.metadata.GPSLongitude,h.metadata.GPSLongitudeRef);
+      doc.text(`GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)}`,14,y); y+=6;
+      doc.setTextColor("#3b82f6");
+      doc.text(`Google Maps: https://maps.google.com/?q=${lat},${lon}`,14,y); y+=6;
+      doc.setTextColor("#000000");
+    }
+
+    if(h.metadata && h.metadata.Software){doc.text(`Detected Software: ${h.metadata.Software}`,14,y); y+=6;}
+
+    // Original + ELA thumbnails
+    if(h.originalDataUrl && h.elaDataUrl){
+      try{
+        const oProps=doc.getImageProperties(h.originalDataUrl);
+        const oWidth=50; const oHeight=(oProps.height*oWidth)/oProps.width;
+        doc.addImage(h.originalDataUrl,'PNG',14,y,oWidth,oHeight);
+
+        const eProps=doc.getImageProperties(h.elaDataUrl);
+        const eWidth=50; const eHeight=(eProps.height*eWidth)/eProps.width;
+        doc.addImage(h.elaDataUrl,'PNG',14+oWidth+5,y,eWidth,eHeight);
+        y+=Math.max(oHeight,eHeight)+6;
+      }catch(e){console.log("Failed to add images:",e);}
+    }
+
+    const barWidth=100; const barHeight=8;
+    doc.setFillColor(riskColor); doc.rect(14,y,(h.risk/100)*barWidth,barHeight,'F');
+    doc.setDrawColor(0,0,0); doc.rect(14,y,barWidth,barHeight); y+=barHeight+10;
+
+    if(y>250){doc.addPage(); y=20;}
   }
 
-  const originalCanvas = document.getElementById("originalCanvas");
-  const elaCanvas = document.getElementById("elaCanvas");
+  doc.setFontSize(10); doc.setTextColor("#555555");
+  doc.text("Disclaimer: Client-side generated PDF. Not server-verified.",14,y);
 
-  const originalImg = compressCanvas(originalCanvas);
-  const elaImg = compressCanvas(elaCanvas);
-
-  doc.text("Image Analysis Report", 20, 15);
-
-  doc.addImage(originalImg, "JPEG", 20, 20, 170, 60);
-  doc.addImage(elaImg, "JPEG", 20, 90, 170, 60);
-
-  doc.save("analysis-report.pdf");
-
+  doc.save("GeoTag_Forensic_Report_Full.pdf");
 });
