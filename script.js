@@ -175,28 +175,30 @@ document.getElementById("downloadPdfBtn").addEventListener("click", function(){
     if(h.metadata && h.metadata.Software){doc.text(`Detected Software: ${h.metadata.Software}`,14,y); y+=6;}
 
     // Original + ELA thumbnails
-    if(h.originalDataUrl && h.elaDataUrl){
-      try{
-        const oProps=doc.getImageProperties(h.originalDataUrl);
-        const oWidth=50; const oHeight=(oProps.height*oWidth)/oProps.width;
-        doc.addImage(h.originalDataUrl,'PNG',14,y,oWidth,oHeight);
+    const { jsPDF } = window.jspdf;
 
-        const eProps=doc.getImageProperties(h.elaDataUrl);
-        const eWidth=50; const eHeight=(eProps.height*eWidth)/eProps.width;
-        doc.addImage(h.elaDataUrl,'PNG',14+oWidth+5,y,eWidth,eHeight);
-        y+=Math.max(oHeight,eHeight)+6;
-      }catch(e){console.log("Failed to add images:",e);}
-    }
+document.getElementById("downloadPdfBtn").addEventListener("click", function () {
 
-    const barWidth=100; const barHeight=8;
-    doc.setFillColor(riskColor); doc.rect(14,y,(h.risk/100)*barWidth,barHeight,'F');
-    doc.setDrawColor(0,0,0); doc.rect(14,y,barWidth,barHeight); y+=barHeight+10;
+  const doc = new jsPDF({ compress: true });
 
-    if(y>250){doc.addPage(); y=20;}
-  }
+  const canvas = document.getElementById("originalCanvas");
 
-  doc.setFontSize(10); doc.setTextColor("#555555");
-  doc.text("Disclaimer: Client-side generated PDF. Not server-verified.",14,y);
+  // 🔥 CREATE SMALLER VERSION
+  const smallCanvas = document.createElement("canvas");
+  const ctx = smallCanvas.getContext("2d");
 
-  doc.save("GeoTag_Forensic_Report_Full.pdf");
+  const scale = 0.3; // 30% size (pwede mo gawing 0.4 or 0.5)
+  smallCanvas.width = canvas.width * scale;
+  smallCanvas.height = canvas.height * scale;
+
+  ctx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
+
+  // 🔥 Convert to compressed JPEG
+  const imgData = smallCanvas.toDataURL("image/jpeg", 0.5);
+
+  doc.addImage(imgData, "JPEG", 10, 20, 180, 100);
+
+  doc.save("report.pdf");
+
 });
+
