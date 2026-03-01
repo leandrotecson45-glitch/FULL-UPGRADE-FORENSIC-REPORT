@@ -1,18 +1,3 @@
-// Admin login
-const usernameInput = document.getElementById("username");
-const passwordInput = document.getElementById("password");
-const loginBtn = document.getElementById("loginBtn");
-const loginMsg = document.getElementById("loginMsg");
-const loginDiv = document.getElementById("loginDiv");
-const mainPanel = document.getElementById("mainPanel");
-
-loginBtn.onclick = function(){
-  if(usernameInput.value === "admin" && passwordInput.value === "password"){
-    loginDiv.style.display = "none";
-    mainPanel.style.display = "block";
-  } else { loginMsg.textContent = "Invalid credentials"; }
-}
-
 // History array
 let history = [];
 
@@ -200,3 +185,4 @@ document.getElementById("downloadPdfBtn").addEventListener("click", function(){
 
   doc.save("GeoTag_Forensic_Report_Full.pdf");
 });
+
