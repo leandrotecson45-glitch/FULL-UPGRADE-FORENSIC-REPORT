@@ -134,37 +134,35 @@ document.getElementById("downloadPdfBtn").addEventListener("click", function () 
     compress: true
   });
 
-  function compressCanvas(canvas, scale = 0.4, quality = 0.6) {
+  function compressCanvas(canvas) {
+
+    // 🔥 FIXED SMALL SIZE (hindi percentage)
+    const targetWidth = 800; // fixed width
+    const scale = targetWidth / canvas.width;
+
     const smallCanvas = document.createElement("canvas");
     const ctx = smallCanvas.getContext("2d");
 
-    smallCanvas.width = canvas.width * scale;
+    smallCanvas.width = targetWidth;
     smallCanvas.height = canvas.height * scale;
 
     ctx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
 
-    return smallCanvas.toDataURL("image/jpeg", quality);
+    // 🔥 VERY COMPRESSED JPEG
+    return smallCanvas.toDataURL("image/jpeg", 0.4);
   }
 
   const originalCanvas = document.getElementById("originalCanvas");
   const elaCanvas = document.getElementById("elaCanvas");
 
-  // 🔥 COMPRESSED IMAGES
-  const originalImg = compressCanvas(originalCanvas, 0.4, 0.6);
-  const elaImg = compressCanvas(elaCanvas, 0.4, 0.6);
+  const originalImg = compressCanvas(originalCanvas);
+  const elaImg = compressCanvas(elaCanvas);
 
   doc.text("Image Analysis Report", 20, 15);
 
-  doc.text("Original Image", 20, 25);
-  doc.addImage(originalImg, "JPEG", 20, 30, 170, 70);
-
-  doc.text("ELA Heatmap", 20, 110);
-  doc.addImage(elaImg, "JPEG", 20, 115, 170, 70);
-
-  const resultText = document.getElementById("result").innerText;
-  doc.text(resultText || "No result available.", 20, 200);
+  doc.addImage(originalImg, "JPEG", 20, 20, 170, 60);
+  doc.addImage(elaImg, "JPEG", 20, 90, 170, 60);
 
   doc.save("analysis-report.pdf");
 
 });
-
